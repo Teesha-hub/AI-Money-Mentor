@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Money Mentor - Take Control of Your Financial Future</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-chart-line"></i>
+                <span>AI Money Mentor</span>
+            </div>
+            <button class="nav-cta" onclick="scrollToQuestionnaire()">Get Started</button>
+        </div>
+    </nav>
+
+    <section id="hero" class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">Take Control of Your Financial Future</h1>
+                <p class="hero-subtitle">Understand your money habits and improve your financial health with AI-powered guidance</p>
+                <button class="cta-button" onclick="scrollToQuestionnaire()">
+                    Start Free Check
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+                <div class="hero-stats">
+                    <div class="stat-item">
+                        <div class="stat-number">10K+</div>
+                        <div class="stat-label">Users Analyzed</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">4.8/5</div>
+                        <div class="stat-label">Satisfaction Rate</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">Free</div>
+                        <div class="stat-label">Forever</div>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-image">
+                <div class="hero-image-collage" aria-hidden="true">
+                    <div class="hero-photo photo-1">
+                        <img src="https://images.unsplash.com/photo-1554224155-1696413565d3?auto=format&fit=crop&w=900&q=80" alt="Person reviewing financial dashboard" loading="lazy">
+                    </div>
+                    <div class="hero-photo photo-2">
+                        <img src="https://images.unsplash.com/photo-1579621970795-87facc2f976d?auto=format&fit=crop&w=900&q=80" alt="Savings coins and investment planning" loading="lazy">
+                    </div>
+                    <div class="hero-photo photo-3">
+                        <img src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=900&q=80" alt="Financial meeting with charts" loading="lazy">
+                    </div>
+                </div>
+                <div class="floating-card card-1">
+                    <i class="fas fa-piggy-bank"></i>
+                    <span>Smart Savings</span>
+                </div>
+                <div class="floating-card card-2">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Investment Growth</span>
+                </div>
+                <div class="floating-card card-3">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Financial Security</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="container">
+            <h2 class="section-title">How We Help You Grow</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <img class="feature-photo" src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=900&q=80" alt="Financial analytics dashboard" loading="lazy">
+                    <div class="feature-icon">
+                        <i class="fas fa-heartbeat"></i>
+                    </div>
+                    <h3>Financial Health Score</h3>
+                    <p>Get a comprehensive score based on your income, savings, investments, and spending habits</p>
+                </div>
+                <div class="feature-card">
+                    <img class="feature-photo" src="https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=900&q=80" alt="Person planning personal finances" loading="lazy">
+                    <div class="feature-icon">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h3>Behavioral Analysis</h3>
+                    <p>Understand your financial personality and discover patterns in your money decisions</p>
+                </div>
+                <div class="feature-card">
+                    <img class="feature-photo" src="https://media.istockphoto.com/id/675813092/photo/double-exposure-business-man-on-stock-financial-exchange-stock-market-financial-indices-on-led.jpg?s=170667a&w=0&k=20&c=V1izfKczVQow2eQaD79Ohwyc2HmxwCdKVXloQ-oFXx0=" alt="Stock market growth chart representing future simulation" loading="lazy">
+                    <div class="feature-icon">
+                        <i class="fas fa-arrow-trend-up"></i>
+                    </div>
+                    <h3><i class="fas fa-chart-line" aria-hidden="true"></i> Future Simulation</h3>
+                    <p>See where you'll be in 5 years with current habits vs. optimized financial behavior</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="questionnaire" class="questionnaire hidden">
+        <div class="container">
+            <div class="questionnaire-header">
+                <h2>Financial Health Assessment</h2>
+                <p>Answer 8 quick questions to get your personalized report</p>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar"></div>
+            </div>
+            <div class="progress-text">
+                <span id="currentQuestion">1</span> of <span id="totalQuestions">8</span>
+            </div>
+
+            <div class="question-container" id="questionContainer">
+            </div>
+
+            <div class="navigation-buttons">
+                <button class="btn-secondary" id="prevBtn" onclick="previousQuestion()" disabled>
+                    <i class="fas fa-arrow-left"></i> Previous
+                </button>
+                <button class="btn-primary" id="nextBtn" onclick="nextQuestion()">
+                    Next <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section id="results" class="results hidden">
+        <div class="container">
+            <div class="results-header">
+                <h2>Your Financial Health Report</h2>
+            </div>
+
+            <div class="step-heading">
+                <span>STEP 1</span>
+                <h3>Show Score (Out of 100)</h3>
+            </div>
+            <div class="score-card">
+                <div class="score-visual">
+                    <svg class="score-circle" viewBox="0 0 200 200">
+                        <circle class="score-bg" cx="100" cy="100" r="85"></circle>
+                        <circle class="score-progress" id="scoreCircle" cx="100" cy="100" r="85"></circle>
+                    </svg>
+                    <div class="score-text">
+                        <div class="score-number" id="scoreNumber">0</div>
+                        <div class="score-label">out of 100</div>
+                    </div>
+                </div>
+                <div class="score-details">
+                    <h3 id="personalityType">Your Financial Personality</h3>
+                    <p id="personalityDescription">Calculating your results...</p>
+                </div>
+            </div>
+
+            <div class="step-heading">
+                <span>STEP 2</span>
+                <h3>What's Going Wrong</h3>
+            </div>
+            <div class="insight-card">
+                <ul id="problemList" class="insight-list"></ul>
+            </div>
+
+            <div class="step-heading">
+                <span>STEP 3</span>
+                <h3>How to Improve</h3>
+            </div>
+            <div class="insight-card improve">
+                <ul id="improvementList" class="insight-list"></ul>
+            </div>
+
+            <div class="step-heading">
+                <span>STEP 4</span>
+                <h3>Ask AI for Detailed Advice</h3>
+            </div>
+            <div class="ask-ai-cta">
+                <button type="button" class="btn-primary" id="openChatBtn">
+                    <i class="fas fa-robot"></i>
+                    Ask AI for Detailed Advice
+                </button>
+            </div>
+
+            <div class="detailed-advice-card">
+                <h3 class="section-subtitle">AI Detailed Advice</h3>
+                <p id="detailedAdvice">Your personalized guidance will appear here after analysis.</p>
+            </div>
+
+            <div class="simulation-container">
+                <h3 class="section-subtitle">Your Financial Future</h3>
+                <div class="simulation-grid">
+                    <div class="simulation-card current-path">
+                        <div class="simulation-header">
+                            <i class="fas fa-road"></i>
+                            <h4>Current Path</h4>
+                        </div>
+                        <div class="simulation-content" id="currentPath">
+                            <div class="simulation-metric">
+                                <span class="metric-label">In 5 Years</span>
+                                <span class="metric-icon"><i class="fas fa-hourglass-half"></i></span>
+                                <span class="metric-value" id="currentSavings">₹0</span>
+                            </div>
+                            <p class="future-summary" id="currentFutureSummary"></p>
+                        </div>
+                    </div>
+                    <div class="simulation-card improved-path">
+                        <div class="simulation-header">
+                            <i class="fas fa-rocket"></i>
+                            <h4>Improved Path</h4>
+                        </div>
+                        <div class="simulation-content" id="improvedPath">
+                            <div class="simulation-metric">
+                                <span class="metric-label">In 5 Years</span>
+                                <span class="metric-icon"><i class="fas fa-bolt"></i></span>
+                                <span class="metric-value" id="improvedSavings">₹0</span>
+                            </div>
+                            <p class="future-summary" id="improvedFutureSummary"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-plan">
+                <h3 class="section-subtitle">Your 30-Day Action Plan</h3>
+                <div class="plan-grid" id="actionPlan">
+                </div>
+            </div>
+
+            <div class="email-section">
+                <div class="email-card">
+                    <div class="email-icon">
+                        <i class="fas fa-envelope"></i>
+                    </div>
+                    <h3>Get Your Detailed Report</h3>
+                    <p>Receive a comprehensive PDF report with personalized insights and recommendations</p>
+                    <form class="email-form" id="emailForm" onsubmit="sendReport(event)">
+                        <input type="text" id="userName" placeholder="Your Name" required>
+                        <input type="email" id="userEmail" placeholder="Your Email" required>
+                        <button type="submit" class="btn-primary">
+                            <span id="sendButtonText">Send My Report</span>
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="logo">
+                        <i class="fas fa-chart-line"></i>
+                        <span>AI Money Mentor</span>
+                    </div>
+                    <p>Empowering better financial decisions through AI</p>
+                </div>
+                <div class="footer-disclaimer">
+                    <p><strong>Disclaimer:</strong> This is an educational tool. Please consult a certified financial advisor for personalized advice.</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 AI Money Mentor. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite">
+        <div class="loading-card">
+            <div class="loader"></div>
+            <p id="loadingMessage">Analyzing your financial habits...</p>
+        </div>
+    </div>
+
+    <div id="chatPanel" class="chat-panel hidden" aria-live="polite">
+        <div class="chat-header">
+            <h3><i class="fas fa-comments"></i> AI Finance Chat</h3>
+            <button id="closeChatBtn" class="chat-close" type="button" aria-label="Close chat">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="chatMessages" class="chat-messages">
+            <div class="chat-message ai">
+                Ask me anything about saving, investing, or debt repayment. I will use your score to personalize guidance.
+            </div>
+        </div>
+        <form id="chatForm" class="chat-input-row">
+            <input id="chatInput" type="text" placeholder="How can I save more each month?" required>
+            <button id="chatSendBtn" type="submit" class="btn-primary">Send</button>
+        </form>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
