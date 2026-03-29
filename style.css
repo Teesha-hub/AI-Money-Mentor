@@ -38,7 +38,7 @@ body {
 }
 
 a {
-    text-decoration: none;
+    text-decoration: none !important;
     color: inherit;
 }
 
@@ -48,12 +48,21 @@ button {
     cursor: pointer;
 }
 
+* {
+    pointer-events: auto;
+}
+
+*::before,
+*::after {
+    pointer-events: none;
+}
+
 .hidden {
     display: none !important;
 }
 
-/* Fallback: if JS does not load, clicking a #questionnaire link still reveals the section */
-#questionnaire:target {
+/* Fallback: if JS does not load, clicking a #questionSection link still reveals the section */
+#questionSection:target {
     display: block !important;
 }
 

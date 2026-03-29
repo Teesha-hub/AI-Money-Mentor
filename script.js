@@ -131,7 +131,7 @@ function isValidEmail(value) {
 }
 
 function ensureQuestionnaireReady() {
-    const questionnaire = document.getElementById('questionnaire');
+    const questionnaire = document.getElementById('questionSection');
     const container = document.getElementById('questionContainer');
 
     if (!questionnaire || !container) {
@@ -148,7 +148,7 @@ function ensureQuestionnaireReady() {
 
 function scrollToQuestionnaire() {
     ensureQuestionnaireReady();
-    document.getElementById('questionnaire').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('questionSection').scrollIntoView({ behavior: 'smooth' });
 }
 
 function renderQuestion() {
@@ -745,7 +745,7 @@ async function callGemini(promptText) {
 }
 
 async function calculateResults() {
-    document.getElementById('questionnaire').classList.add('hidden');
+    document.getElementById('questionSection').classList.add('hidden');
     document.getElementById('results').classList.remove('hidden');
     document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
 
@@ -1129,6 +1129,8 @@ function initializeApp() {
     appInitialized = true;
 
     const navGetStartedBtn = document.getElementById('navGetStartedBtn');
+    const startBtn = document.getElementById('startBtn');
+    const questionSection = document.getElementById('questionSection');
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
     const openChatBtn = document.getElementById('openChatBtn');
@@ -1140,6 +1142,26 @@ function initializeApp() {
 
     if (!navGetStartedBtn) {
         console.error('Button or question section not found');
+    }
+
+    if (navGetStartedBtn && questionSection) {
+        navGetStartedBtn.addEventListener('click', () => {
+            questionSection.style.display = 'block';
+            questionSection.style.visibility = 'visible';
+            questionSection.style.opacity = '1';
+            questionSection.classList.remove('hidden');
+            scrollToQuestionnaire();
+        });
+    }
+
+    if (startBtn && questionSection) {
+        startBtn.addEventListener('click', () => {
+            questionSection.style.display = 'block';
+            questionSection.style.visibility = 'visible';
+            questionSection.style.opacity = '1';
+            questionSection.classList.remove('hidden');
+            scrollToQuestionnaire();
+        });
     }
 
     if (prevBtn) {
@@ -1173,3 +1195,29 @@ if (document.readyState === 'loading') {
 } else {
     initializeApp();
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('JS Loaded');
+
+    const btn = document.getElementById('startBtn');
+    const section = document.getElementById('questionSection');
+
+    if (!btn) {
+        console.error('Button not found');
+        return;
+    }
+
+    if (!section) {
+        console.error('Section not found');
+        return;
+    }
+
+    btn.addEventListener('click', function () {
+        console.log('Button clicked');
+        section.style.display = 'block';
+        section.style.visibility = 'visible';
+        section.style.opacity = '1';
+        section.classList.remove('hidden');
+        section.scrollIntoView({ behavior: 'smooth' });
+    });
+});
