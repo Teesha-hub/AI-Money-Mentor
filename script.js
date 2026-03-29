@@ -1,7 +1,14 @@
-const GEMINI_API_KEY = 'AIzaSyCa2FEkuu8B4ngHRqEwLGGv28_jmn96oFo';
-const SERVICE_ID = 'service_bye3v3e';
-const TEMPLATE_ID = 'template_g7debpg';
-const PUBLIC_KEY = 'dgkzTtICwD5tVpKbL';
+const GEMINI_API_KEY = 'ENTER_YOUR_GEMINI_API_KEY';
+const SERVICE_ID = 'ENTER_YOUR_EMAILJS_SERVICE_ID';
+const TEMPLATE_ID = 'ENTER_YOUR_EMAILJS_TEMPLATE_ID';
+const PUBLIC_KEY = 'ENTER_YOUR_EMAILJS_PUBLIC_KEY';
+
+const STORAGE_KEYS = {
+    geminiApiKey: 'ai_money_mentor_gemini_api_key',
+    emailServiceId: 'ai_money_mentor_email_service_id',
+    emailTemplateId: 'ai_money_mentor_email_template_id',
+    emailPublicKey: 'ai_money_mentor_email_public_key'
+};
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GEMINI_MODEL_CANDIDATES = [
@@ -12,7 +19,7 @@ const GEMINI_MODEL_CANDIDATES = [
     'gemini-2.0-flash-lite',
     'gemini-pro'
 ];
-let discoveredGeminiModel = null;
+const discoveredGeminiModelByKey = {};
 
 const questions = [
     {
@@ -115,15 +122,46 @@ let analysisResult = {
     analysisComplete: false
 };
 let isEmailJsInitialized = false;
+let initializedEmailJsPublicKey = '';
 
-function isEmailJsConfigMissing() {
-    const placeholders = ['SERVICE_ID', 'TEMPLATE_ID', 'PUBLIC_KEY'];
-    return !SERVICE_ID
-        || !TEMPLATE_ID
-        || !PUBLIC_KEY
-        || placeholders.includes(SERVICE_ID)
-        || placeholders.includes(TEMPLATE_ID)
-        || placeholders.includes(PUBLIC_KEY);
+function isPlaceholderValue(value) {
+    return !value || /^ENTER_YOUR_/i.test(value);
+}
+
+function readSecret(storageKey, fallbackValue, promptLabel, promptIfMissing = true) {
+    const fromStorage = window.localStorage ? localStorage.getItem(storageKey) : '';
+    let value = fromStorage || fallbackValue;
+
+    if (isPlaceholderValue(value) && promptIfMissing) {
+        const typed = window.prompt(`${promptLabel} is required. It is stored only in your browser for this site.`);
+        if (typed && typed.trim()) {
+            value = typed.trim();
+            if (window.localStorage) {
+                localStorage.setItem(storageKey, value);
+            }
+        }
+    }
+
+    return value;
+}
+
+function getGeminiApiKey(promptIfMissing = true) {
+    return readSecret(STORAGE_KEYS.geminiApiKey, GEMINI_API_KEY, 'Gemini API key', promptIfMissing);
+}
+
+function getEmailJsConfig(promptIfMissing = true) {
+    return {
+        serviceId: readSecret(STORAGE_KEYS.emailServiceId, SERVICE_ID, 'EmailJS Service ID', promptIfMissing),
+        templateId: readSecret(STORAGE_KEYS.emailTemplateId, TEMPLATE_ID, 'EmailJS Template ID', promptIfMissing),
+        publicKey: readSecret(STORAGE_KEYS.emailPublicKey, PUBLIC_KEY, 'EmailJS Public Key', promptIfMissing)
+    };
+}
+
+function isEmailJsConfigMissing(config) {
+    return !config
+        || isPlaceholderValue(config.serviceId)
+        || isPlaceholderValue(config.templateId)
+        || isPlaceholderValue(config.publicKey);
 }
 
 function getEmailErrorMessage(error) {
@@ -146,8 +184,8 @@ function getEmailErrorMessage(error) {
     return 'Email sending failed. Check EmailJS service, template, and public key.';
 }
 
-function initializeEmailJsIfNeeded() {
-    if (isEmailJsInitialized) {
+function initializeEmailJsIfNeeded(config) {
+    if (isEmailJsInitialized && initializedEmailJsPublicKey === config.publicKey) {
         return;
     }
 
@@ -155,12 +193,13 @@ function initializeEmailJsIfNeeded() {
         throw new Error('EmailJS SDK not loaded. Check internet connection or script include.');
     }
 
-    if (isEmailJsConfigMissing()) {
+    if (isEmailJsConfigMissing(config)) {
         throw new Error('EmailJS credentials are missing. Set SERVICE_ID, TEMPLATE_ID, and PUBLIC_KEY.');
     }
 
-    emailjs.init(PUBLIC_KEY);
+    emailjs.init(config.publicKey);
     isEmailJsInitialized = true;
+    initializedEmailJsPublicKey = config.publicKey;
 }
 
 function isValidEmail(value) {
@@ -429,12 +468,12 @@ function sanitizeModelName(name) {
     return name.replace(/^models\//, '');
 }
 
-async function discoverGeminiModel() {
-    if (discoveredGeminiModel) {
-        return discoveredGeminiModel;
+async function discoverGeminiModel(apiKey) {
+    if (discoveredGeminiModelByKey[apiKey]) {
+        return discoveredGeminiModelByKey[apiKey];
     }
 
-    const listUrl = `${GEMINI_API_BASE}?key=${GEMINI_API_KEY}`;
+    const listUrl = `${GEMINI_API_BASE}?key=${apiKey}`;
     const response = await fetch(listUrl);
     if (!response.ok) {
         const errorText = await response.text();
@@ -454,8 +493,8 @@ async function discoverGeminiModel() {
         .find((name) => /flash/i.test(name));
 
     if (preferred) {
-        discoveredGeminiModel = preferred;
-        return discoveredGeminiModel;
+        discoveredGeminiModelByKey[apiKey] = preferred;
+        return discoveredGeminiModelByKey[apiKey];
     }
 
     const fallback = generateContentModels
@@ -463,14 +502,19 @@ async function discoverGeminiModel() {
         .find(Boolean);
 
     if (fallback) {
-        discoveredGeminiModel = fallback;
-        return discoveredGeminiModel;
+        discoveredGeminiModelByKey[apiKey] = fallback;
+        return discoveredGeminiModelByKey[apiKey];
     }
 
     throw new Error('No Gemini model with generateContent support found for this key.');
 }
 
 async function callGemini(promptText) {
+    const apiKey = getGeminiApiKey(true);
+    if (isPlaceholderValue(apiKey)) {
+        throw new Error('Gemini API key is required. Add your own key when prompted.');
+    }
+
     const requestBody = JSON.stringify({
         contents: [{
             parts: [{
@@ -483,8 +527,8 @@ async function callGemini(promptText) {
 
     // Try discovered model first so we use what this specific key/account supports.
     try {
-        const discoveredModel = await discoverGeminiModel();
-        const discoveredEndpoint = `${GEMINI_API_BASE}/${discoveredModel}:generateContent?key=${GEMINI_API_KEY}`;
+        const discoveredModel = await discoverGeminiModel(apiKey);
+        const discoveredEndpoint = `${GEMINI_API_BASE}/${discoveredModel}:generateContent?key=${apiKey}`;
         const discoveredResponse = await fetch(discoveredEndpoint, {
             method: 'POST',
             headers: {
@@ -509,11 +553,11 @@ async function callGemini(promptText) {
     }
 
     for (const model of GEMINI_MODEL_CANDIDATES) {
-        if (model === discoveredGeminiModel) {
+        if (model === discoveredGeminiModelByKey[apiKey]) {
             continue;
         }
 
-        const endpoint = `${GEMINI_API_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        const endpoint = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
@@ -604,10 +648,6 @@ Keep it simple and practical.`;
 
 async function analyzeWithGemini(score, fallbackPersonality) {
     try {
-        if (GEMINI_API_KEY === 'GEMINI_API_KEY') {
-            throw new Error('Gemini API key placeholder is not configured.');
-        }
-
         const responseText = await callGemini(buildAnalysisPrompt(score, fallbackPersonality));
         showLoading('Generating your personalized plan...');
 
@@ -829,10 +869,6 @@ async function handleChatSubmit(event) {
     sendBtn.textContent = 'Thinking...';
 
     try {
-        if (GEMINI_API_KEY === 'GEMINI_API_KEY') {
-            throw new Error('Gemini API key placeholder is not configured.');
-        }
-
         const aiText = await callGemini(buildChatPrompt(message));
         const finalText = aiText || 'I could not generate a response. Please try again.';
         addChatMessage('ai', finalText);
@@ -885,7 +921,8 @@ async function sendReport(event) {
     }
 
     try {
-        initializeEmailJsIfNeeded();
+        const emailConfig = getEmailJsConfig(true);
+        initializeEmailJsIfNeeded(emailConfig);
 
         const templateParams = {
             name,
@@ -913,7 +950,7 @@ async function sendReport(event) {
             week4: analysisResult.weeklyPlan[3]
         };
 
-        const emailResult = await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams);
+        const emailResult = await emailjs.send(emailConfig.serviceId, emailConfig.templateId, templateParams);
 
         if (emailResult && emailResult.status && Number(emailResult.status) >= 400) {
             throw new Error(`EmailJS returned status ${emailResult.status}: ${emailResult.text || 'Failed'}`);
