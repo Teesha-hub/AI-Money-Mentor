@@ -1,25 +1,8 @@
-const GEMINI_API_KEY = 'ENTER_YOUR_GEMINI_API_KEY';
-const SERVICE_ID = 'ENTER_YOUR_EMAILJS_SERVICE_ID';
-const TEMPLATE_ID = 'ENTER_YOUR_EMAILJS_TEMPLATE_ID';
-const PUBLIC_KEY = 'ENTER_YOUR_EMAILJS_PUBLIC_KEY';
-
-const STORAGE_KEYS = {
-    geminiApiKey: 'ai_money_mentor_gemini_api_key',
-    emailServiceId: 'ai_money_mentor_email_service_id',
-    emailTemplateId: 'ai_money_mentor_email_template_id',
-    emailPublicKey: 'ai_money_mentor_email_public_key'
-};
-
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_MODEL_CANDIDATES = [
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-flash',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
-    'gemini-pro'
-];
-const discoveredGeminiModelByKey = {};
+// Gemini API calls are now proxied through /api/generate on Vercel
+// EmailJS calls are now proxied through /api/send-email on Vercel
+// All credentials are stored securely in Vercel environment variables
+const API_GENERATE_ENDPOINT = '/api/generate';
+const API_SEND_EMAIL_ENDPOINT = '/api/send-email';
 
 const questions = [
     {
@@ -121,85 +104,9 @@ let analysisResult = {
     weeklyPlan: ['-', '-', '-', '-'],
     analysisComplete: false
 };
-let isEmailJsInitialized = false;
-let initializedEmailJsPublicKey = '';
 
 function isPlaceholderValue(value) {
     return !value || /^ENTER_YOUR_/i.test(value);
-}
-
-function readSecret(storageKey, fallbackValue, promptLabel, promptIfMissing = true) {
-    const fromStorage = window.localStorage ? localStorage.getItem(storageKey) : '';
-    let value = fromStorage || fallbackValue;
-
-    if (isPlaceholderValue(value) && promptIfMissing) {
-        const typed = window.prompt(`${promptLabel} is required. It is stored only in your browser for this site.`);
-        if (typed && typed.trim()) {
-            value = typed.trim();
-            if (window.localStorage) {
-                localStorage.setItem(storageKey, value);
-            }
-        }
-    }
-
-    return value;
-}
-
-function getGeminiApiKey(promptIfMissing = true) {
-    return readSecret(STORAGE_KEYS.geminiApiKey, GEMINI_API_KEY, 'Gemini API key', promptIfMissing);
-}
-
-function getEmailJsConfig(promptIfMissing = true) {
-    return {
-        serviceId: readSecret(STORAGE_KEYS.emailServiceId, SERVICE_ID, 'EmailJS Service ID', promptIfMissing),
-        templateId: readSecret(STORAGE_KEYS.emailTemplateId, TEMPLATE_ID, 'EmailJS Template ID', promptIfMissing),
-        publicKey: readSecret(STORAGE_KEYS.emailPublicKey, PUBLIC_KEY, 'EmailJS Public Key', promptIfMissing)
-    };
-}
-
-function isEmailJsConfigMissing(config) {
-    return !config
-        || isPlaceholderValue(config.serviceId)
-        || isPlaceholderValue(config.templateId)
-        || isPlaceholderValue(config.publicKey);
-}
-
-function getEmailErrorMessage(error) {
-    if (!error) {
-        return 'Unknown error while sending email.';
-    }
-
-    if (typeof error === 'string') {
-        return error;
-    }
-
-    if (error.status || error.text) {
-        return `EmailJS error ${error.status || ''} ${error.text || ''}`.trim();
-    }
-
-    if (error.message) {
-        return error.message;
-    }
-
-    return 'Email sending failed. Check EmailJS service, template, and public key.';
-}
-
-function initializeEmailJsIfNeeded(config) {
-    if (isEmailJsInitialized && initializedEmailJsPublicKey === config.publicKey) {
-        return;
-    }
-
-    if (!window.emailjs) {
-        throw new Error('EmailJS SDK not loaded. Check internet connection or script include.');
-    }
-
-    if (isEmailJsConfigMissing(config)) {
-        throw new Error('EmailJS credentials are missing. Set SERVICE_ID, TEMPLATE_ID, and PUBLIC_KEY.');
-    }
-
-    emailjs.init(config.publicKey);
-    isEmailJsInitialized = true;
-    initializedEmailJsPublicKey = config.publicKey;
 }
 
 function isValidEmail(value) {
@@ -464,125 +371,42 @@ function currencyLakhsFromScore(score, multiplier) {
     return Math.round((normalized * multiplier) / 10);
 }
 
-function sanitizeModelName(name) {
-    return name.replace(/^models\//, '');
-}
+// Model discovery moved to backend (/api/generate) for security
 
-async function discoverGeminiModel(apiKey) {
-    if (discoveredGeminiModelByKey[apiKey]) {
-        return discoveredGeminiModelByKey[apiKey];
-    }
-
-    const listUrl = `${GEMINI_API_BASE}?key=${apiKey}`;
-    const response = await fetch(listUrl);
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Gemini model discovery failed: ${response.status} ${errorText}`);
-    }
-
-    const data = await response.json();
-    const models = Array.isArray(data.models) ? data.models : [];
-
-    const generateContentModels = models.filter((model) =>
-        Array.isArray(model.supportedGenerationMethods)
-        && model.supportedGenerationMethods.includes('generateContent')
-    );
-
-    const preferred = generateContentModels
-        .map((model) => sanitizeModelName(model.name || ''))
-        .find((name) => /flash/i.test(name));
-
-    if (preferred) {
-        discoveredGeminiModelByKey[apiKey] = preferred;
-        return discoveredGeminiModelByKey[apiKey];
-    }
-
-    const fallback = generateContentModels
-        .map((model) => sanitizeModelName(model.name || ''))
-        .find(Boolean);
-
-    if (fallback) {
-        discoveredGeminiModelByKey[apiKey] = fallback;
-        return discoveredGeminiModelByKey[apiKey];
-    }
-
-    throw new Error('No Gemini model with generateContent support found for this key.');
-}
-
+// Call AI analysis through secure Vercel serverless function
 async function callGemini(promptText) {
-    const apiKey = getGeminiApiKey(true);
-    if (isPlaceholderValue(apiKey)) {
-        throw new Error('Gemini API key is required. Add your own key when prompted.');
+    if (!promptText || typeof promptText !== 'string') {
+        throw new Error('Prompt must be a non-empty string.');
     }
 
-    const requestBody = JSON.stringify({
-        contents: [{
-            parts: [{
-                text: promptText
-            }]
-        }]
-    });
-
-    const modelErrors = [];
-
-    // Try discovered model first so we use what this specific key/account supports.
     try {
-        const discoveredModel = await discoverGeminiModel(apiKey);
-        const discoveredEndpoint = `${GEMINI_API_BASE}/${discoveredModel}:generateContent?key=${apiKey}`;
-        const discoveredResponse = await fetch(discoveredEndpoint, {
+        const response = await fetch(API_GENERATE_ENDPOINT, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: requestBody
+            body: JSON.stringify({
+                prompt: promptText.trim()
+            })
         });
 
-        if (discoveredResponse.ok) {
-            const data = await discoveredResponse.json();
-            return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.details || error.error || `API error: ${response.status}`);
         }
 
-        const discoveredError = await discoveredResponse.text();
-        modelErrors.push(`${discoveredModel}: ${discoveredResponse.status}`);
-
-        if (discoveredResponse.status !== 404) {
-            throw new Error(`Gemini request failed: ${discoveredResponse.status} ${discoveredError}`);
+        const data = await response.json();
+        if (!data.success || !data.data?.text) {
+            throw new Error('Invalid response from API. Try again.');
         }
-    } catch (discoverError) {
-        modelErrors.push(`discovery: ${(discoverError && discoverError.message) ? discoverError.message : 'failed'}`);
+
+        return data.data.text;
+    } catch (error) {
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+            throw new Error('Network error. Check your connection and try again.');
+        }
+        throw error;
     }
-
-    for (const model of GEMINI_MODEL_CANDIDATES) {
-        if (model === discoveredGeminiModelByKey[apiKey]) {
-            continue;
-        }
-
-        const endpoint = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: requestBody
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        }
-
-        const errorText = await response.text();
-        modelErrors.push(`${model}: ${response.status}`);
-
-        // 404 usually means model alias not available for the key/version, so try next candidate.
-        if (response.status === 404) {
-            continue;
-        }
-
-        throw new Error(`Gemini request failed: ${response.status} ${errorText}`);
-    }
-
-    throw new Error(`Gemini request failed for available models (${modelErrors.join(', ')}). Try hard refresh (Ctrl+F5) to clear cached JavaScript.`);
 }
 
 async function calculateResults() {
@@ -921,39 +745,40 @@ async function sendReport(event) {
     }
 
     try {
-        const emailConfig = getEmailJsConfig(true);
-        initializeEmailJsIfNeeded(emailConfig);
-
-        const templateParams = {
-            name,
-            from_name: name,
-            user_name: name,
-            to_name: name,
-            email,
-            toEmail: email,
-            to_email: email,
-            recipient_email: email,
-            user_email: email,
-            reply_to: email,
+        const payload = {
+            recipientName: name,
+            recipientEmail: email,
             score: analysisResult.score,
             personality: analysisResult.personality,
             description: analysisResult.description,
             problems: analysisResult.problems.join(' | '),
             improvements: analysisResult.improvements.join(' | '),
-            ai_advice: analysisResult.detailedAdvice,
-            future_summary: `Current: ${analysisResult.futureContinueText} | Improved: ${analysisResult.futureImproveText}`,
-            current_savings: analysisResult.currentPathSavings,
-            improved_savings: analysisResult.improvedPathSavings,
+            detailedAdvice: analysisResult.detailedAdvice,
+            futureSummary: `Current: ${analysisResult.futureContinueText} | Improved: ${analysisResult.futureImproveText}`,
+            currentSavings: analysisResult.currentPathSavings,
+            improvedSavings: analysisResult.improvedPathSavings,
             week1: analysisResult.weeklyPlan[0],
             week2: analysisResult.weeklyPlan[1],
             week3: analysisResult.weeklyPlan[2],
             week4: analysisResult.weeklyPlan[3]
         };
 
-        const emailResult = await emailjs.send(emailConfig.serviceId, emailConfig.templateId, templateParams);
+        const response = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
 
-        if (emailResult && emailResult.status && Number(emailResult.status) >= 400) {
-            throw new Error(`EmailJS returned status ${emailResult.status}: ${emailResult.text || 'Failed'}`);
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.details || error.error || `API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to send email.');
         }
 
         buttonText.textContent = 'Sent Successfully!';
@@ -963,9 +788,8 @@ async function sendReport(event) {
             document.getElementById('emailForm').reset();
         }, 3000);
     } catch (error) {
-        const details = getEmailErrorMessage(error);
         console.error('Error sending email:', error);
-        alert(`Could not send report. ${details}`);
+        alert(`Could not send report. ${error.message || 'Please try again.'}`);
         buttonText.textContent = 'Error - Try Again';
         setTimeout(() => {
             buttonText.textContent = originalText;
