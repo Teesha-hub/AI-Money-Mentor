@@ -3,6 +3,11 @@
 // All credentials are stored securely in Vercel environment variables
 const API_GENERATE_ENDPOINT = '/api/generate';
 const API_SEND_EMAIL_ENDPOINT = '/api/send-email';
+const LOCAL_GEMINI_STORAGE_KEY = 'ai_money_mentor_local_gemini_api_key';
+const DIRECT_GEMINI_MODEL = 'gemini-1.5-flash-latest';
+const DIRECT_GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${DIRECT_GEMINI_MODEL}:generateContent`;
+
+let loadingShownAt = 0;
 
 console.log('JS Loaded: AI Money Mentor');
 
@@ -115,10 +120,25 @@ function isValidEmail(value) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function ensureQuestionnaireReady() {
+    const questionnaire = document.getElementById('questionnaire');
+    const container = document.getElementById('questionContainer');
+
+    if (!questionnaire || !container) {
+        return;
+    }
+
+    questionnaire.classList.remove('hidden');
+
+    // Render only when empty to avoid unnecessary re-renders.
+    if (!container.innerHTML.trim()) {
+        renderQuestion();
+    }
+}
+
 function scrollToQuestionnaire() {
-    document.getElementById('questionnaire').classList.remove('hidden');
+    ensureQuestionnaireReady();
     document.getElementById('questionnaire').scrollIntoView({ behavior: 'smooth' });
-    renderQuestion();
 }
 
 function renderQuestion() {
@@ -202,11 +222,19 @@ function showLoading(message) {
     const overlay = document.getElementById('loadingOverlay');
     const loadingMessage = document.getElementById('loadingMessage');
     loadingMessage.textContent = message;
+    loadingShownAt = Date.now();
     overlay.classList.remove('hidden');
 }
 
 function hideLoading() {
-    document.getElementById('loadingOverlay').classList.add('hidden');
+    const overlay = document.getElementById('loadingOverlay');
+    const elapsed = Date.now() - loadingShownAt;
+    const minimumVisibleMs = 700;
+    const waitMs = Math.max(0, minimumVisibleMs - elapsed);
+
+    window.setTimeout(() => {
+        overlay.classList.add('hidden');
+    }, waitMs);
 }
 
 function setSubmitState(isDisabled) {
@@ -375,10 +403,83 @@ function currencyLakhsFromScore(score, multiplier) {
 
 // Model discovery moved to backend (/api/generate) for security
 
+function isLocalDevelopmentContext() {
+    return window.location.protocol === 'file:'
+        || window.location.hostname === 'localhost'
+        || window.location.hostname === '127.0.0.1';
+}
+
+function readLocalGeminiApiKey() {
+    const fromStorage = window.localStorage ? localStorage.getItem(LOCAL_GEMINI_STORAGE_KEY) : '';
+    if (fromStorage && fromStorage.trim()) {
+        return fromStorage.trim();
+    }
+
+    const typed = window.prompt('Local development: Enter your Gemini API key. It is stored only in this browser.');
+    if (typed && typed.trim()) {
+        const key = typed.trim();
+        if (window.localStorage) {
+            localStorage.setItem(LOCAL_GEMINI_STORAGE_KEY, key);
+        }
+        return key;
+    }
+
+    return '';
+}
+
+async function callGeminiDirect(promptText) {
+    const localKey = readLocalGeminiApiKey();
+    if (!localKey) {
+        throw new Error('Gemini API key is required for local development fallback.');
+    }
+
+    const response = await fetch(`${DIRECT_GEMINI_ENDPOINT}?key=${encodeURIComponent(localKey)}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [{
+                    text: promptText.trim()
+                }]
+            }]
+        })
+    });
+
+    const payloadText = await response.text();
+    let payload = null;
+
+    try {
+        payload = JSON.parse(payloadText);
+    } catch (error) {
+        payload = null;
+    }
+
+    if (!response.ok) {
+        const details = payload?.error?.message || payloadText || `Status ${response.status}`;
+        throw new Error(`Direct Gemini request failed: ${details}`);
+    }
+
+    const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!text) {
+        throw new Error('Gemini returned an empty response.');
+    }
+
+    return text;
+}
+
 // Call AI analysis through secure Vercel serverless function
 async function callGemini(promptText) {
     if (!promptText || typeof promptText !== 'string') {
         throw new Error('Prompt must be a non-empty string.');
+    }
+
+    const isLocalDev = isLocalDevelopmentContext();
+
+    // When opened as file://, relative /api routes are unavailable.
+    if (window.location.protocol === 'file:') {
+        return callGeminiDirect(promptText);
     }
 
     try {
@@ -392,21 +493,38 @@ async function callGemini(promptText) {
             })
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.details || error.error || `API error: ${response.status}`);
+        const rawText = await response.text();
+        let data = null;
+        try {
+            data = rawText ? JSON.parse(rawText) : null;
+        } catch (error) {
+            data = null;
         }
 
-        const data = await response.json();
+        if (!response.ok) {
+            const details = data?.details || data?.error || `API error: ${response.status}`;
+
+            if (isLocalDev && (response.status === 404 || response.status === 405)) {
+                return callGeminiDirect(promptText);
+            }
+
+            throw new Error(details);
+        }
+
         if (!data.success || !data.data?.text) {
             throw new Error('Invalid response from API. Try again.');
         }
 
         return data.data.text;
     } catch (error) {
-        if (error instanceof TypeError && error.message.includes('fetch')) {
+        if (isLocalDev && error instanceof TypeError && /fetch|network/i.test(error.message || '')) {
+            return callGeminiDirect(promptText);
+        }
+
+        if (error instanceof TypeError && /fetch|network/i.test(error.message || '')) {
             throw new Error('Network error. Check your connection and try again.');
         }
+
         throw error;
     }
 }
@@ -809,6 +927,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const openChatBtn = document.getElementById('openChatBtn');
     const closeChatBtn = document.getElementById('closeChatBtn');
     const chatForm = document.getElementById('chatForm');
+
+    if (window.location.hash === '#questionnaire') {
+        ensureQuestionnaireReady();
+    }
+
+    window.addEventListener('hashchange', () => {
+        if (window.location.hash === '#questionnaire') {
+            ensureQuestionnaireReady();
+        }
+    });
 
     if (navGetStartedBtn) {
         navGetStartedBtn.addEventListener('click', (event) => {
