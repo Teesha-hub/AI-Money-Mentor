@@ -17,7 +17,7 @@
                 <i class="fas fa-chart-line"></i>
                 <span>AI Money Mentor</span>
             </div>
-            <button class="nav-cta" id="navGetStartedBtn" type="button">Get Started</button>
+            <button class="nav-cta" id="navGetStartedBtn" type="button" onclick="scrollToQuestionnaire()">Get Started</button>
         </div>
     </nav>
 
@@ -26,7 +26,7 @@
             <div class="hero-content">
                 <h1 class="hero-title">Take Control of Your Financial Future</h1>
                 <p class="hero-subtitle">Understand your money habits and improve your financial health with AI-powered guidance</p>
-                <button class="cta-button" id="startBtn" type="button">
+                <button class="cta-button" id="startBtn" type="button" onclick="scrollToQuestionnaire()">
                     Start Free Check
                     <i class="fas fa-arrow-right"></i>
                 </button>
@@ -105,7 +105,7 @@
         </div>
     </section>
 
-    <section id="questionSection" class="questionnaire hidden">
+    <section id="questionnaire" class="questionnaire hidden">
         <div class="container">
             <div class="questionnaire-header">
                 <h2>Financial Health Assessment</h2>
@@ -123,10 +123,10 @@
             </div>
 
             <div class="navigation-buttons">
-                <button class="btn-secondary" id="prevBtn" disabled>
+                <button class="btn-secondary" id="prevBtn" onclick="previousQuestion()" disabled>
                     <i class="fas fa-arrow-left"></i> Previous
                 </button>
-                <button class="btn-primary" id="nextBtn">
+                <button class="btn-primary" id="nextBtn" onclick="nextQuestion()">
                     Next <i class="fas fa-arrow-right"></i>
                 </button>
             </div>
@@ -239,7 +239,7 @@
                     </div>
                     <h3>Get Your Detailed Report</h3>
                     <p>Receive a comprehensive PDF report with personalized insights and recommendations</p>
-                    <form class="email-form" id="emailForm">
+                    <form class="email-form" id="emailForm" onsubmit="sendReport(event)">
                         <input type="text" id="userName" placeholder="Your Name" required>
                         <input type="email" id="userEmail" placeholder="Your Email" required>
                         <button type="submit" class="btn-primary">

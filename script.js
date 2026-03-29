@@ -121,7 +121,7 @@ function isValidEmail(value) {
 }
 
 function ensureQuestionnaireReady() {
-    const questionnaire = document.getElementById('questionSection');
+    const questionnaire = document.getElementById('questionnaire');
     const container = document.getElementById('questionContainer');
 
     if (!questionnaire || !container) {
@@ -138,7 +138,7 @@ function ensureQuestionnaireReady() {
 
 function scrollToQuestionnaire() {
     ensureQuestionnaireReady();
-    document.getElementById('questionSection').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('questionnaire').scrollIntoView({ behavior: 'smooth' });
 }
 
 function renderQuestion() {
@@ -150,8 +150,7 @@ function renderQuestion() {
         <div class="options-grid">
             ${question.options.map((option) => `
                 <div class="option-card ${answers[question.id] === option.value ? 'selected' : ''}"
-                     data-question-id="${question.id}"
-                     data-option-value="${option.value}">
+                     onclick="selectOption(${question.id}, ${option.value})">
                     <h4>${option.label}</h4>
                     <p>${option.description}</p>
                 </div>
@@ -531,7 +530,7 @@ async function callGemini(promptText) {
 }
 
 async function calculateResults() {
-    document.getElementById('questionSection').classList.add('hidden');
+    document.getElementById('questionnaire').classList.add('hidden');
     document.getElementById('results').classList.remove('hidden');
     document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
 
@@ -928,12 +927,8 @@ function initializeApp() {
     appInitialized = true;
 
     const navGetStartedBtn = document.getElementById('navGetStartedBtn');
-    const startBtn = document.getElementById('startBtn');
-    const questionSection = document.getElementById('questionSection');
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
-    const emailForm = document.getElementById('emailForm');
-    const questionContainer = document.getElementById('questionContainer');
     const openChatBtn = document.getElementById('openChatBtn');
     const closeChatBtn = document.getElementById('closeChatBtn');
     const chatForm = document.getElementById('chatForm');
@@ -941,53 +936,16 @@ function initializeApp() {
     // Pre-render first question so content is always ready once section is shown.
     renderQuestion();
 
-    if (navGetStartedBtn) {
-        navGetStartedBtn.addEventListener('click', () => {
-            if (questionSection) {
-                questionSection.classList.remove('hidden');
-                scrollToQuestionnaire();
-            } else {
-                console.error('Button or question section not found');
-            }
-        });
-    }
-
-    if (startBtn) {
-        startBtn.addEventListener('click', () => {
-            if (questionSection) {
-                questionSection.classList.remove('hidden');
-                scrollToQuestionnaire();
-            } else {
-                console.error('Button or question section not found');
-            }
-        });
+    if (!navGetStartedBtn) {
+        console.error('Button or question section not found');
     }
 
     if (prevBtn) {
-        prevBtn.addEventListener('click', previousQuestion);
+        prevBtn.disabled = currentQuestionIndex === 0;
     }
 
     if (nextBtn) {
-        nextBtn.addEventListener('click', nextQuestion);
-    }
-
-    if (questionContainer) {
-        questionContainer.addEventListener('click', (event) => {
-            const card = event.target.closest('.option-card[data-question-id][data-option-value]');
-            if (!card) {
-                return;
-            }
-
-            const questionId = Number(card.dataset.questionId);
-            const optionValue = Number(card.dataset.optionValue);
-            if (!Number.isNaN(questionId) && !Number.isNaN(optionValue)) {
-                selectOption(questionId, optionValue);
-            }
-        });
-    }
-
-    if (emailForm) {
-        emailForm.addEventListener('submit', sendReport);
+        nextBtn.disabled = answers[questions[currentQuestionIndex].id] === undefined;
     }
 
     if (openChatBtn) {
