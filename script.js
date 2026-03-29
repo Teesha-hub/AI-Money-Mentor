@@ -150,7 +150,8 @@ function renderQuestion() {
         <div class="options-grid">
             ${question.options.map((option) => `
                 <div class="option-card ${answers[question.id] === option.value ? 'selected' : ''}"
-                     onclick="selectOption(${question.id}, ${option.value})">
+                     data-question-id="${question.id}"
+                     data-option-value="${option.value}">
                     <h4>${option.label}</h4>
                     <p>${option.description}</p>
                 </div>
@@ -918,15 +919,26 @@ async function sendReport(event) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+let appInitialized = false;
+
+function initializeApp() {
+    if (appInitialized) {
+        return;
+    }
+    appInitialized = true;
+
     const navGetStartedBtn = document.getElementById('navGetStartedBtn');
     const heroGetStartedBtn = document.getElementById('heroGetStartedBtn');
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
     const emailForm = document.getElementById('emailForm');
+    const questionContainer = document.getElementById('questionContainer');
     const openChatBtn = document.getElementById('openChatBtn');
     const closeChatBtn = document.getElementById('closeChatBtn');
     const chatForm = document.getElementById('chatForm');
+
+    // Pre-render first question so content is always ready once section is shown.
+    renderQuestion();
 
     if (window.location.hash === '#questionnaire') {
         ensureQuestionnaireReady();
@@ -960,6 +972,21 @@ document.addEventListener('DOMContentLoaded', () => {
         nextBtn.addEventListener('click', nextQuestion);
     }
 
+    if (questionContainer) {
+        questionContainer.addEventListener('click', (event) => {
+            const card = event.target.closest('.option-card[data-question-id][data-option-value]');
+            if (!card) {
+                return;
+            }
+
+            const questionId = Number(card.dataset.questionId);
+            const optionValue = Number(card.dataset.optionValue);
+            if (!Number.isNaN(questionId) && !Number.isNaN(optionValue)) {
+                selectOption(questionId, optionValue);
+            }
+        });
+    }
+
     if (emailForm) {
         emailForm.addEventListener('submit', sendReport);
     }
@@ -980,4 +1007,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chatForm) {
         chatForm.addEventListener('submit', handleChatSubmit);
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    initializeApp();
+}
