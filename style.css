@@ -37,12 +37,23 @@ body {
     padding: 0 24px;
 }
 
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+button {
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+}
+
 .hidden {
     display: none !important;
 }
 
 /* Fallback: if JS does not load, clicking a #questionnaire link still reveals the section */
-#questionnaire:target {
+#questionSection:target {
     display: block !important;
 }
 
@@ -89,6 +100,12 @@ body {
     background: var(--primary-dark);
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+}
+
+#startBtn,
+#navGetStartedBtn {
+    position: relative;
+    z-index: 20;
 }
 
 .hero {
