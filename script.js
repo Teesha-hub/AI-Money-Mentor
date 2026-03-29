@@ -799,9 +799,34 @@ async function sendReport(event) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const navGetStartedBtn = document.getElementById('navGetStartedBtn');
+    const heroGetStartedBtn = document.getElementById('heroGetStartedBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const emailForm = document.getElementById('emailForm');
     const openChatBtn = document.getElementById('openChatBtn');
     const closeChatBtn = document.getElementById('closeChatBtn');
     const chatForm = document.getElementById('chatForm');
+
+    if (navGetStartedBtn) {
+        navGetStartedBtn.addEventListener('click', scrollToQuestionnaire);
+    }
+
+    if (heroGetStartedBtn) {
+        heroGetStartedBtn.addEventListener('click', scrollToQuestionnaire);
+    }
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', previousQuestion);
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', nextQuestion);
+    }
+
+    if (emailForm) {
+        emailForm.addEventListener('submit', sendReport);
+    }
 
     if (openChatBtn) {
         openChatBtn.addEventListener('click', () => {
