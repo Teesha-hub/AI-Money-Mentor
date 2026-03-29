@@ -4,6 +4,8 @@
 const API_GENERATE_ENDPOINT = '/api/generate';
 const API_SEND_EMAIL_ENDPOINT = '/api/send-email';
 
+console.log('JS Loaded: AI Money Mentor');
+
 const questions = [
     {
         id: 1,
@@ -809,11 +811,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatForm = document.getElementById('chatForm');
 
     if (navGetStartedBtn) {
-        navGetStartedBtn.addEventListener('click', scrollToQuestionnaire);
+        navGetStartedBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            scrollToQuestionnaire();
+        });
     }
 
     if (heroGetStartedBtn) {
-        heroGetStartedBtn.addEventListener('click', scrollToQuestionnaire);
+        heroGetStartedBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            scrollToQuestionnaire();
+        });
     }
 
     if (prevBtn) {
