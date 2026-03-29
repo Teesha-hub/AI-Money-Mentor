@@ -4,8 +4,18 @@
 const API_GENERATE_ENDPOINT = '/api/generate';
 const API_SEND_EMAIL_ENDPOINT = '/api/send-email';
 const LOCAL_GEMINI_STORAGE_KEY = 'ai_money_mentor_local_gemini_api_key';
-const DIRECT_GEMINI_MODEL = 'gemini-1.5-flash-latest';
-const DIRECT_GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${DIRECT_GEMINI_MODEL}:generateContent`;
+const LOCAL_EMAILJS_SERVICE_ID_KEY = 'ai_money_mentor_local_emailjs_service_id';
+const LOCAL_EMAILJS_TEMPLATE_ID_KEY = 'ai_money_mentor_local_emailjs_template_id';
+const LOCAL_EMAILJS_PUBLIC_KEY_KEY = 'ai_money_mentor_local_emailjs_public_key';
+const DIRECT_GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const DIRECT_GEMINI_MODEL_CANDIDATES = [
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-flash',
+    'gemini-pro'
+];
+const directGeminiDiscoveredModelByKey = {};
 
 let loadingShownAt = 0;
 
@@ -427,46 +437,251 @@ function readLocalGeminiApiKey() {
     return '';
 }
 
+function clearLocalGeminiApiKey() {
+    if (window.localStorage) {
+        localStorage.removeItem(LOCAL_GEMINI_STORAGE_KEY);
+    }
+}
+
+function sanitizeModelName(name) {
+    return String(name || '').replace(/^models\//, '');
+}
+
+async function discoverDirectGeminiModel(apiKey) {
+    if (directGeminiDiscoveredModelByKey[apiKey]) {
+        return directGeminiDiscoveredModelByKey[apiKey];
+    }
+
+    const response = await fetch(`${DIRECT_GEMINI_API_BASE}?key=${encodeURIComponent(apiKey)}`);
+    if (!response.ok) {
+        return '';
+    }
+
+    const data = await response.json();
+    const models = Array.isArray(data.models) ? data.models : [];
+    const generateModels = models.filter((model) =>
+        Array.isArray(model.supportedGenerationMethods)
+        && model.supportedGenerationMethods.includes('generateContent')
+    );
+
+    const preferred = generateModels
+        .map((model) => sanitizeModelName(model.name))
+        .find((name) => /flash/i.test(name));
+
+    const fallback = generateModels
+        .map((model) => sanitizeModelName(model.name))
+        .find(Boolean);
+
+    const chosen = preferred || fallback || '';
+    if (chosen) {
+        directGeminiDiscoveredModelByKey[apiKey] = chosen;
+    }
+
+    return chosen;
+}
+
 async function callGeminiDirect(promptText) {
-    const localKey = readLocalGeminiApiKey();
+    let localKey = readLocalGeminiApiKey();
     if (!localKey) {
         throw new Error('Gemini API key is required for local development fallback.');
     }
 
-    const response = await fetch(`${DIRECT_GEMINI_ENDPOINT}?key=${encodeURIComponent(localKey)}`, {
+    keyAttempt:
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        const discovered = await discoverDirectGeminiModel(localKey);
+        const modelCandidates = discovered
+            ? [discovered, ...DIRECT_GEMINI_MODEL_CANDIDATES.filter((model) => model !== discovered)]
+            : [...DIRECT_GEMINI_MODEL_CANDIDATES];
+
+        const modelErrors = [];
+
+        for (const model of modelCandidates) {
+            const endpoint = `${DIRECT_GEMINI_API_BASE}/${model}:generateContent?key=${encodeURIComponent(localKey)}`;
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: promptText.trim()
+                        }]
+                    }]
+                })
+            });
+
+            const payloadText = await response.text();
+            let payload = null;
+
+            try {
+                payload = JSON.parse(payloadText);
+            } catch (error) {
+                payload = null;
+            }
+
+            if (!response.ok) {
+                const details = payload?.error?.message || payloadText || `Status ${response.status}`;
+                const isExpiredOrInvalidKey = /expired|invalid api key|api key not valid|permission denied/i.test(details);
+                const isModelUnavailable = response.status === 404
+                    || /not found|not supported for generateContent/i.test(details);
+
+                if (isExpiredOrInvalidKey && attempt === 0) {
+                    clearLocalGeminiApiKey();
+                    localKey = readLocalGeminiApiKey();
+                    if (!localKey) {
+                        throw new Error('Direct Gemini request failed: API key missing after refresh.');
+                    }
+                    continue keyAttempt;
+                }
+
+                if (isModelUnavailable) {
+                    modelErrors.push(`${model}: unavailable`);
+                    continue;
+                }
+
+                throw new Error(`Direct Gemini request failed: ${details}`);
+            }
+
+            const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (!text) {
+                throw new Error('Gemini returned an empty response.');
+            }
+
+            return text;
+        }
+
+        throw new Error(`Direct Gemini request failed: No supported model available for this API key (${modelErrors.join(', ')}).`);
+    }
+
+    throw new Error('Direct Gemini request failed after retry.');
+}
+
+function readLocalSecret(storageKey, promptLabel) {
+    const fromStorage = window.localStorage ? localStorage.getItem(storageKey) : '';
+    if (fromStorage && fromStorage.trim()) {
+        return fromStorage.trim();
+    }
+
+    const typed = window.prompt(`Local development: Enter ${promptLabel}. It is stored only in this browser.`);
+    if (typed && typed.trim()) {
+        const value = typed.trim();
+        if (window.localStorage) {
+            localStorage.setItem(storageKey, value);
+        }
+        return value;
+    }
+
+    return '';
+}
+
+function getLocalEmailJsConfig() {
+    return {
+        serviceId: readLocalSecret(LOCAL_EMAILJS_SERVICE_ID_KEY, 'EmailJS Service ID'),
+        templateId: readLocalSecret(LOCAL_EMAILJS_TEMPLATE_ID_KEY, 'EmailJS Template ID'),
+        publicKey: readLocalSecret(LOCAL_EMAILJS_PUBLIC_KEY_KEY, 'EmailJS Public Key')
+    };
+}
+
+function buildEmailTemplateParams(payload) {
+    const name = payload.recipientName;
+    const email = payload.recipientEmail;
+
+    return {
+        name,
+        from_name: name,
+        user_name: name,
+        to_name: name,
+        email,
+        toEmail: email,
+        to_email: email,
+        recipient_email: email,
+        user_email: email,
+        reply_to: email,
+        score: payload.score,
+        personality: payload.personality,
+        description: payload.description,
+        problems: payload.problems,
+        improvements: payload.improvements,
+        ai_advice: payload.detailedAdvice,
+        future_summary: payload.futureSummary,
+        current_savings: payload.currentSavings,
+        improved_savings: payload.improvedSavings,
+        week1: payload.week1,
+        week2: payload.week2,
+        week3: payload.week3,
+        week4: payload.week4
+    };
+}
+
+async function sendEmailDirectLocal(payload) {
+    const cfg = getLocalEmailJsConfig();
+    if (!cfg.serviceId || !cfg.templateId || !cfg.publicKey) {
+        throw new Error('Local EmailJS credentials are required for local fallback.');
+    }
+
+    const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: promptText.trim()
-                }]
-            }]
+            service_id: cfg.serviceId,
+            template_id: cfg.templateId,
+            user_id: cfg.publicKey,
+            template_params: buildEmailTemplateParams(payload)
         })
     });
 
-    const payloadText = await response.text();
-    let payload = null;
+    const rawText = await response.text();
+    if (!response.ok) {
+        throw new Error(`Local EmailJS request failed: ${rawText || `Status ${response.status}`}`);
+    }
+
+    return { success: true };
+}
+
+async function sendReportViaApi(payload) {
+    const isLocalDev = isLocalDevelopmentContext();
 
     try {
-        payload = JSON.parse(payloadText);
+        const response = await fetch(API_SEND_EMAIL_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const rawText = await response.text();
+        let data = null;
+        try {
+            data = rawText ? JSON.parse(rawText) : null;
+        } catch (error) {
+            data = null;
+        }
+
+        if (!response.ok) {
+            const details = data?.details || data?.error || rawText || `API error: ${response.status}`;
+
+            if (isLocalDev && (response.status === 404 || response.status === 405)) {
+                return sendEmailDirectLocal(payload);
+            }
+
+            throw new Error(details);
+        }
+
+        if (data && data.success === false) {
+            throw new Error(data.error || 'Failed to send email.');
+        }
+
+        return data || { success: true };
     } catch (error) {
-        payload = null;
+        if (isLocalDev && error instanceof TypeError && /fetch|network/i.test(error.message || '')) {
+            return sendEmailDirectLocal(payload);
+        }
+        throw error;
     }
-
-    if (!response.ok) {
-        const details = payload?.error?.message || payloadText || `Status ${response.status}`;
-        throw new Error(`Direct Gemini request failed: ${details}`);
-    }
-
-    const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!text) {
-        throw new Error('Gemini returned an empty response.');
-    }
-
-    return text;
 }
 
 // Call AI analysis through secure Vercel serverless function
@@ -883,20 +1098,7 @@ async function sendReport(event) {
             week4: analysisResult.weeklyPlan[3]
         };
 
-        const response = await fetch('/api/send-email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.details || error.error || `API error: ${response.status}`);
-        }
-
-        const data = await response.json();
+        const data = await sendReportViaApi(payload);
         if (!data.success) {
             throw new Error(data.error || 'Failed to send email.');
         }
