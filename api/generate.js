@@ -23,14 +23,44 @@ export default async function handler(req, res) {
     }
 
     const fallbackModels = [
-  'gemini-1.5-flash',
-  'gemini-1.5-pro'
-]; 
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+      'gemini-pro'
+    ];
 
     const requestedModel = typeof model === 'string' ? model.trim() : '';
-    const modelsToTry = requestedModel
-      ? [requestedModel, ...fallbackModels.filter((candidate) => candidate !== requestedModel)]
-      : fallbackModels;
+
+    // Discover models supported by this key/account first.
+    let discoveredModel = '';
+    try {
+      const listEndpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`;
+      const listResponse = await fetch(listEndpoint);
+      if (listResponse.ok) {
+        const listData = await listResponse.json();
+        const models = Array.isArray(listData.models) ? listData.models : [];
+        const generateModels = models.filter((m) =>
+          Array.isArray(m.supportedGenerationMethods)
+          && m.supportedGenerationMethods.includes('generateContent')
+        );
+
+        const names = generateModels
+          .map((m) => String(m.name || '').replace(/^models\//, ''))
+          .filter(Boolean);
+
+        discoveredModel = names.find((name) => /flash/i.test(name)) || names[0] || '';
+      }
+    } catch (discoveryError) {
+      // Ignore discovery errors and continue with fallback candidates.
+      discoveredModel = '';
+    }
+
+    const modelsToTry = [
+      requestedModel,
+      discoveredModel,
+      ...fallbackModels
+    ].filter((candidate, idx, arr) => candidate && arr.indexOf(candidate) === idx);
 
     // Build request payload for Gemini
     const requestPayload = {
