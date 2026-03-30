@@ -10,7 +10,7 @@ An AI-powered financial assistant that helps users understand their money habits
 
 ## 🌐 Live Demo
 
-👉 [Try the Website](https://teesha-hub.github.io/AI-Money-Mentor/)
+👉 [Try the Website](https://ai-money-mentor-nj45.vercel.app/)
 
 ---
 
