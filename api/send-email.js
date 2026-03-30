@@ -9,12 +9,23 @@ export default async function handler(req, res) {
     const serviceId = process.env.EMAILJS_SERVICE_ID;
     const templateId = process.env.EMAILJS_TEMPLATE_ID;
     const publicKey = process.env.EMAILJS_PUBLIC_KEY;
-    const privateKey = process.env.EMAILJS_PRIVATE_KEY;
+    const privateKey = process.env.EMAILJS_PRIVATE_KEY
+      || process.env.EMAILJS_ACCESS_TOKEN
+      || process.env.EMAILJS_PRIVATE_API_KEY
+      || '';
 
     if (!serviceId || !templateId || !publicKey) {
       return res.status(500).json({
         error: 'Server configuration error: EmailJS credentials not set in environment variables.',
         details: 'Contact admin to configure EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, and EMAILJS_PUBLIC_KEY.'
+      });
+    }
+
+    // Many EmailJS accounts enforce strict mode for API usage.
+    if (!privateKey) {
+      return res.status(500).json({
+        error: 'Server configuration error: EmailJS private key is missing.',
+        details: 'API access is in strict mode. Set EMAILJS_PRIVATE_KEY (or EMAILJS_ACCESS_TOKEN) in Vercel environment variables.'
       });
     }
 
@@ -60,7 +71,7 @@ export default async function handler(req, res) {
       template_id: templateId,
       user_id: publicKey,
       // Optional server-side private key for stricter EmailJS auth.
-      ...(privateKey ? { accessToken: privateKey } : {}),
+      accessToken: privateKey,
       template_params: {
         // Recipient field aliases
         name: recipientName,
