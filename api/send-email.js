@@ -9,11 +9,12 @@ export default async function handler(req, res) {
     const serviceId = process.env.EMAILJS_SERVICE_ID;
     const templateId = process.env.EMAILJS_TEMPLATE_ID;
     const publicKey = process.env.EMAILJS_PUBLIC_KEY;
+    const privateKey = process.env.EMAILJS_PRIVATE_KEY;
 
     if (!serviceId || !templateId || !publicKey) {
       return res.status(500).json({
         error: 'Server configuration error: EmailJS credentials not set in environment variables.',
-        details: 'Contact admin to configure EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, and EMAILJS_PUBLIC_KEY'
+        details: 'Contact admin to configure EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, and EMAILJS_PUBLIC_KEY.'
       });
     }
 
@@ -58,6 +59,8 @@ export default async function handler(req, res) {
       service_id: serviceId,
       template_id: templateId,
       user_id: publicKey,
+      // Optional server-side private key for stricter EmailJS auth.
+      ...(privateKey ? { accessToken: privateKey } : {}),
       template_params: {
         // Recipient field aliases
         name: recipientName,
@@ -101,17 +104,32 @@ export default async function handler(req, res) {
       const errorText = await emailResponse.text();
       console.error(`EmailJS API error (${emailResponse.status}):`, errorText);
 
+      let providerDetails = errorText;
+      try {
+        const parsed = errorText ? JSON.parse(errorText) : null;
+        providerDetails = parsed?.message || parsed?.error || parsed?.detail || errorText;
+      } catch (parseError) {
+        providerDetails = errorText;
+      }
+
       if (emailResponse.status === 400) {
         return res.status(400).json({
           error: 'Invalid request to EmailJS API.',
-          details: 'Check template parameters and try again.'
+          details: providerDetails || 'Check template parameters and try again.'
         });
       }
 
       if (emailResponse.status === 401) {
         return res.status(500).json({
           error: 'Authentication failed with EmailJS API.',
-          details: 'Contact admin to verify EmailJS credentials.'
+          details: providerDetails || 'Verify EMAILJS_PUBLIC_KEY (and EMAILJS_PRIVATE_KEY if used).'
+        });
+      }
+
+      if (emailResponse.status === 403) {
+        return res.status(403).json({
+          error: 'EmailJS rejected this request (403).',
+          details: providerDetails || 'Check service/template/public key mapping and EmailJS account restrictions.'
         });
       }
 
@@ -124,7 +142,7 @@ export default async function handler(req, res) {
 
       return res.status(500).json({
         error: 'Failed to send email via EmailJS.',
-        details: `Status ${emailResponse.status}. Please try again later.`
+        details: providerDetails || `Status ${emailResponse.status}. Please try again later.`
       });
     }
 

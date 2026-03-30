@@ -383,20 +383,55 @@ function fallbackWeeklyPlan(improvements) {
 }
 
 function parseJsonFromText(text) {
-    const clean = text.trim();
-    try {
-        return JSON.parse(clean);
-    } catch (error) {
-        const match = clean.match(/\{[\s\S]*\}/);
-        if (match) {
-            try {
-                return JSON.parse(match[0]);
-            } catch (innerError) {
-                return null;
-            }
-        }
+    if (typeof text !== 'string' || !text.trim()) {
         return null;
     }
+
+    const clean = text.trim();
+    const candidates = [];
+
+    // Raw response.
+    candidates.push(clean);
+
+    // Markdown code-fence extraction.
+    const fenced = clean.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced && fenced[1]) {
+        candidates.push(fenced[1].trim());
+    }
+
+    // Broad object extraction.
+    const firstBrace = clean.indexOf('{');
+    const lastBrace = clean.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        candidates.push(clean.slice(firstBrace, lastBrace + 1));
+    }
+
+    for (const candidate of candidates) {
+        try {
+            return JSON.parse(candidate);
+        } catch (error) {
+            // Try a minimal cleanup pass for trailing commas.
+            try {
+                const normalized = candidate
+                    .replace(/,\s*([}\]])/g, '$1')
+                    .trim();
+                return JSON.parse(normalized);
+            } catch (innerError) {
+                // Continue trying next candidate.
+            }
+        }
+    }
+
+    return null;
+}
+
+function buildJsonRepairPrompt(rawResponse) {
+    return `Convert the following content into ONLY valid JSON.
+Do not include markdown, explanations, or code fences.
+Keep the same schema and values where possible.
+
+Content:
+${rawResponse}`;
 }
 
 function safeArray(list, minItems, fallbackItems) {
@@ -810,7 +845,13 @@ async function analyzeWithGemini(score, fallbackPersonality) {
         const responseText = await callGemini(buildAnalysisPrompt(score, fallbackPersonality));
         showLoading('Generating your personalized plan...');
 
-        const parsed = parseJsonFromText(responseText);
+        let parsed = parseJsonFromText(responseText);
+        if (!parsed) {
+            // One recovery attempt: ask AI to reformat into strict JSON only.
+            const repairedText = await callGemini(buildJsonRepairPrompt(responseText));
+            parsed = parseJsonFromText(repairedText);
+        }
+
         if (!parsed) {
             throw new Error('Could not parse Gemini JSON response.');
         }
