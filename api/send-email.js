@@ -21,13 +21,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // Many EmailJS accounts enforce strict mode for API usage.
-    if (!privateKey) {
-      return res.status(500).json({
-        error: 'Server configuration error: EmailJS private key is missing.',
-        details: 'API access is in strict mode. Set EMAILJS_PRIVATE_KEY (or EMAILJS_ACCESS_TOKEN) in Vercel environment variables.'
-      });
-    }
+    // Private key is optional. If your EmailJS account uses strict mode,
+    // EmailJS will return 403 and we surface a clear message below.
 
     // Parse and validate request body
     const {
@@ -71,7 +66,7 @@ export default async function handler(req, res) {
       template_id: templateId,
       user_id: publicKey,
       // Optional server-side private key for stricter EmailJS auth.
-      accessToken: privateKey,
+      ...(privateKey ? { accessToken: privateKey } : {}),
       template_params: {
         // Recipient field aliases
         name: recipientName,
@@ -138,9 +133,12 @@ export default async function handler(req, res) {
       }
 
       if (emailResponse.status === 403) {
+        const strictModeHint = /strict mode|private key|access token/i.test(String(providerDetails || ''));
         return res.status(403).json({
           error: 'EmailJS rejected this request (403).',
-          details: providerDetails || 'Check service/template/public key mapping and EmailJS account restrictions.'
+          details: strictModeHint
+            ? 'Your EmailJS account is in strict mode. Public key only is blocked. Disable strict mode in EmailJS settings, or provide a private key/access token.'
+            : (providerDetails || 'Check service/template/public key mapping and EmailJS account restrictions.')
         });
       }
 
