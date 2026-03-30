@@ -425,6 +425,27 @@ function parseJsonFromText(text) {
     return null;
 }
 
+function looksLikeStructuredPayload(text) {
+    if (!text || typeof text !== 'string') {
+        return false;
+    }
+
+    const clean = text.trim();
+    return /^```/i.test(clean)
+        || clean.startsWith('{')
+        || clean.startsWith('[')
+        || /"personality"\s*:/i.test(clean)
+        || /"problems"\s*:/i.test(clean);
+}
+
+function buildFallbackDetailedAdvice(description, improvements) {
+    const topSteps = Array.isArray(improvements) ? improvements.slice(0, 2) : [];
+    const stepsText = topSteps.length
+        ? ` Start with: ${topSteps.join(' Then, ')}`
+        : '';
+    return `${description}${stepsText}`.trim();
+}
+
 function buildJsonRepairPrompt(rawResponse) {
     return `Convert the following content into ONLY valid JSON.
 Do not include markdown, explanations, or code fences.
@@ -869,13 +890,18 @@ async function analyzeWithGemini(score, fallbackPersonality) {
         const improvedSavings = Number(parsed.futureSimulation?.improvedPathSavingsLakhs)
             || currencyLakhsFromScore(score + 20, 1.2);
 
+        const parsedAdvice = typeof parsed.detailedAdvice === 'string' ? parsed.detailedAdvice.trim() : '';
+        const detailedAdvice = parsedAdvice && !looksLikeStructuredPayload(parsedAdvice)
+            ? parsedAdvice
+            : buildFallbackDetailedAdvice(description, improvements);
+
         analysisResult = {
             score,
             personality,
             description,
             problems,
             improvements,
-            detailedAdvice: parsed.detailedAdvice || responseText,
+            detailedAdvice,
             currentPathSavings: currentSavings,
             improvedPathSavings: Math.max(improvedSavings, currentSavings + 3),
             futureContinueText: parsed.futureSimulation?.currentSummary || 'If you continue these habits, progress stays slow and financial stress can remain high.',
