@@ -837,7 +837,9 @@ Explain:
 - Why their financial health is low
 - What they are doing wrong
 - 5 simple steps to improve
-Keep it simple and practical.`;
+Keep it simple and practical.
+
+Make sure the response is complete, not cut off, and strictly valid JSON. Keep answers concise but meaningful.`;
 }
 
 async function analyzeWithGemini(score, fallbackPersonality) {

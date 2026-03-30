@@ -50,6 +50,7 @@ export default async function handler(req, res) {
       'gemini-2.0-flash-lite',
       'gemini-1.5-flash-latest',
       'gemini-1.5-flash',
+      'gemini-1.5-pro',
       'gemini-pro'
     ];
 
@@ -101,7 +102,7 @@ export default async function handler(req, res) {
       ],
       generationConfig: {
         temperature: 0.25,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
         topP: 0.95,
         topK: 40
       }
@@ -135,46 +136,25 @@ export default async function handler(req, res) {
       if (!geminiResponse.ok) {
         const details = geminiData?.error?.message || rawText || `Status ${geminiResponse.status}`;
         console.error(`[generate] Model ${candidateModel} failed with ${geminiResponse.status}:`, details);
+        console.error('Gemini full error:', rawText);
 
         if (geminiResponse.status === 404) {
           modelErrors.push(`${candidateModel}: unavailable`);
           continue;
         }
 
-        console.error(`Gemini API error (${geminiResponse.status}) on model ${candidateModel}:`, details);
-
-        if (geminiResponse.status === 400) {
-          return res.status(400).json({
-            error: 'Invalid request to Gemini API.',
-            details: 'Check the prompt format and try again.'
-          });
-        }
-        if (geminiResponse.status === 401) {
-          return res.status(500).json({
-            error: 'Authentication failed with Gemini API.',
-            details: 'Contact admin to verify API key configuration.'
-          });
-        }
-        if (geminiResponse.status === 403) {
-          return res.status(403).json({
-            error: 'Access denied. Gemini API quota may be exceeded.',
-            details: 'Try again later or contact admin.'
-          });
-        }
-        if (geminiResponse.status === 429) {
-          return res.status(429).json({
-            error: 'Rate limited. Too many requests to Gemini API.',
-            details: 'Please wait before trying again.'
-          });
-        }
-
         return res.status(500).json({
-          error: 'Gemini API request failed.',
+          success: false,
+          error: 'AI generation failed',
           details
         });
       }
 
-      const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      let text = geminiData?.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text)
+        .join(' ') || '';
+      text = text.trim();
+
       if (!text) {
         modelErrors.push(`${candidateModel}: empty response`);
         continue;
@@ -188,7 +168,8 @@ export default async function handler(req, res) {
 
     if (!responseText) {
       return res.status(500).json({
-        error: 'Gemini API request failed.',
+        success: false,
+        error: 'AI generation failed',
         details: `No working Gemini model found. ${modelErrors.join(' | ') || 'Try again later.'}`
       });
     }
@@ -207,7 +188,8 @@ export default async function handler(req, res) {
     console.error('Handler error:', error.message);
 
     return res.status(500).json({
-      error: 'Internal server error.',
+      success: false,
+      error: 'AI generation failed',
       details: error.message || 'An unexpected error occurred. Please try again later.',
       timestamp: new Date().toISOString()
     });
