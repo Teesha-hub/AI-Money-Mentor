@@ -128,7 +128,14 @@ export default async function handler(req, res) {
       });
     }
 
-    const emailData = await emailResponse.json();
+    const rawSuccessBody = await emailResponse.text();
+    let emailData = null;
+    try {
+      emailData = rawSuccessBody ? JSON.parse(rawSuccessBody) : null;
+    } catch (parseError) {
+      // EmailJS commonly returns plain text "OK" for successful sends.
+      emailData = null;
+    }
 
     // Success response
     return res.status(200).json({
@@ -136,6 +143,7 @@ export default async function handler(req, res) {
       message: 'Email sent successfully!',
       data: {
         recipientEmail,
+        providerResponse: emailData || rawSuccessBody || 'OK',
         timestamp: new Date().toISOString()
       }
     });

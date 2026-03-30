@@ -15,16 +15,25 @@ export default async function handler(req, res) {
     }
 
     // Parse and validate request body
-    const { prompt, model = 'gemini-1.5-flash-latest' } = req.body;
+    const { prompt, model } = req.body;
     if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
       return res.status(400).json({ 
         error: 'Bad request: prompt field is required and must be a non-empty string.' 
       });
     }
 
-    // Construct Gemini API endpoint
-    const geminiApiBase = 'https://generativelanguage.googleapis.com/v1beta/models';
-    const endpoint = `${geminiApiBase}/${model}:generateContent?key=${geminiApiKey}`;
+    const fallbackModels = [
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-8b',
+      'gemini-1.5-pro'
+    ];
+
+    const requestedModel = typeof model === 'string' ? model.trim() : '';
+    const modelsToTry = requestedModel
+      ? [requestedModel, ...fallbackModels.filter((candidate) => candidate !== requestedModel)]
+      : fallbackModels;
 
     // Build request payload for Gemini
     const requestPayload = {
@@ -45,71 +54,85 @@ export default async function handler(req, res) {
       }
     };
 
-    // Call Gemini API
-    const geminiResponse = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestPayload)
-    });
-
-    // Handle Gemini API errors
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error(`Gemini API error (${geminiResponse.status}):`, errorText);
-
-      // Return user-friendly error messages
-      if (geminiResponse.status === 400) {
-        return res.status(400).json({ 
-          error: 'Invalid request to Gemini API.',
-          details: 'Check the prompt format and try again.'
-        });
-      }
-      if (geminiResponse.status === 401) {
-        return res.status(500).json({ 
-          error: 'Authentication failed with Gemini API.',
-          details: 'Contact admin to verify API key configuration.'
-        });
-      }
-      if (geminiResponse.status === 403) {
-        return res.status(403).json({ 
-          error: 'Access denied. Gemini API quota may be exceeded.',
-          details: 'Try again later or contact admin.'
-        });
-      }
-      if (geminiResponse.status === 429) {
-        return res.status(429).json({ 
-          error: 'Rate limited. Too many requests to Gemini API.',
-          details: 'Please wait before trying again.'
-        });
-      }
-
-      return res.status(500).json({ 
-        error: 'Gemini API request failed.',
-        details: `Status ${geminiResponse.status}. Please try again.`
-      });
-    }
-
-    // Parse Gemini response
-    const geminiData = await geminiResponse.json();
-
-    // Extract text from Gemini response
+    const geminiApiBase = 'https://generativelanguage.googleapis.com/v1beta/models';
+    const modelErrors = [];
     let responseText = '';
-    if (
-      geminiData.candidates &&
-      geminiData.candidates.length > 0 &&
-      geminiData.candidates[0].content &&
-      geminiData.candidates[0].content.parts &&
-      geminiData.candidates[0].content.parts.length > 0
-    ) {
-      responseText = geminiData.candidates[0].content.parts[0].text || '';
+    let resolvedModel = requestedModel || fallbackModels[0];
+
+    for (const candidateModel of modelsToTry) {
+      const endpoint = `${geminiApiBase}/${candidateModel}:generateContent?key=${geminiApiKey}`;
+      const geminiResponse = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestPayload)
+      });
+
+      const rawText = await geminiResponse.text();
+      let geminiData = null;
+      try {
+        geminiData = rawText ? JSON.parse(rawText) : null;
+      } catch (parseError) {
+        geminiData = null;
+      }
+
+      if (!geminiResponse.ok) {
+        const details = geminiData?.error?.message || rawText || `Status ${geminiResponse.status}`;
+
+        if (geminiResponse.status === 404) {
+          modelErrors.push(`${candidateModel}: unavailable`);
+          continue;
+        }
+
+        console.error(`Gemini API error (${geminiResponse.status}) on model ${candidateModel}:`, details);
+
+        if (geminiResponse.status === 400) {
+          return res.status(400).json({
+            error: 'Invalid request to Gemini API.',
+            details: 'Check the prompt format and try again.'
+          });
+        }
+        if (geminiResponse.status === 401) {
+          return res.status(500).json({
+            error: 'Authentication failed with Gemini API.',
+            details: 'Contact admin to verify API key configuration.'
+          });
+        }
+        if (geminiResponse.status === 403) {
+          return res.status(403).json({
+            error: 'Access denied. Gemini API quota may be exceeded.',
+            details: 'Try again later or contact admin.'
+          });
+        }
+        if (geminiResponse.status === 429) {
+          return res.status(429).json({
+            error: 'Rate limited. Too many requests to Gemini API.',
+            details: 'Please wait before trying again.'
+          });
+        }
+
+        return res.status(500).json({
+          error: 'Gemini API request failed.',
+          details
+        });
+      }
+
+      const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!text) {
+        modelErrors.push(`${candidateModel}: empty response`);
+        continue;
+      }
+
+      responseText = text;
+      resolvedModel = candidateModel;
+      break;
     }
 
     if (!responseText) {
-      return res.status(500).json({ 
-        error: 'Gemini returned an empty response.',
-        details: 'The API did not generate content. Try a different prompt.'
+      return res.status(500).json({
+        error: 'Gemini API request failed.',
+        details: `No working Gemini model found. ${modelErrors.join(' | ') || 'Try again later.'}`
       });
     }
 
@@ -118,7 +141,7 @@ export default async function handler(req, res) {
       success: true,
       data: {
         text: responseText,
-        model: model,
+        model: resolvedModel,
         timestamp: new Date().toISOString()
       }
     });
